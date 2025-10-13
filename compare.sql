@@ -1,9 +1,29 @@
 with
-    BA_Recent_Transactions as (
-        select upper(trim(CustomerID)) as CustomerID, sum(Amount)/100 as [BA RecentTransactions]
-        from GBSDev2..tbTransaction
-        where TranDateTime > '2025-08-01'
-        group by upper(trim(CustomerID))
+    BA_LTV as (
+        select customerID
+            , (
+                (
+                    (sum(amountlost)-sum(amountwon))
+                    +(sum(debitadjustmentamount)-sum(creditadjustmentamount))
+                    +(sum(casinoamountlost)-sum(casinoamountwon))
+                )/100
+              )*-1 as [BA LTV]
+		from [GBSDev2].dbo.tbDailyFigure
+        group by customerID
+
+    ),
+    BD_LTV as (
+        select customerID
+            , (
+                (
+                    (sum(amountlost)-sum(amountwon))
+                    +(sum(debitadjustmentamount)-sum(creditadjustmentamount))
+                    +(sum(casinoamountlost)-sum(casinoamountwon))
+                )/100
+              )*-1 as [BD LTV]
+		from [BettorsDenDev].dbo.tbDailyFigure
+        group by customerID
+
     ),
     BA as (
         select 
@@ -16,12 +36,12 @@ with
             , cast(SessionLastActivity as date) as [BA Last Session Activity]
             , cid as [BA CID]            
             , InetTarget as [BA InetTarget]
-            , coalesce(bar.[BA RecentTransactions], 0) as [BA RecentTransactions]
+            , coalesce(bl.[BA LTV], 0) as [BA LTV]
             , case when c.AgentType in ('M', 'A') then AffiliateID else null end as [BA AffiliateID]
             , AgentID as [BA AgentID]
         from GBSDev2..tbCustomer c
-        left join BA_Recent_Transactions bar on bar.CustomerID = upper(trim(c.CustomerID))
-        where cid < 312448 -- magic number - max CID after restore from production
+        left join BA_LTV bl on bl.CustomerID = upper(trim(c.CustomerID))
+        where cid < 312448 -- magic number - max CID after restore from production, same effect as: OpenedBy <> 'Migration'
     ),
     BD_LastDeposit as (
         select
@@ -45,12 +65,6 @@ with
         group by
             upper(trim(LoginID))
     ),
-    BD_Recent_Transactions as (
-        select upper(trim(CustomerID)) as CustomerID, sum(Amount)/100 as [BD RecentTransactions]
-        from BettorsDenDev..tbTransaction
-        where TranDateTime > '2025-08-01'
-        group by upper(trim(CustomerID))
-    ),
     BD as (
         select
             EMail as [BD EMail]
@@ -62,11 +76,11 @@ with
             , cast(bl.SessionLastActivity as date) as [BD Last Session Activity]
             , cid as [BD CID]
             , InetTarget as [BD InetTarget]
-            , coalesce(bdt.[BD RecentTransactions], 0) as [BD RecentTransactions]
+            , coalesce(bdl.[BD LTV], 0) as [BD LTV]
         from BettorsDenDev..tbCustomer c
         left join BD_LastDeposit bd on bd.CustomerID = trim(c.CustomerID)
         left join BD_LastLogin bl on bl.CustomerID = trim(c.CustomerID)
-        left join BD_Recent_Transactions bdt on bdt.CustomerID = trim(c.CustomerID)
+        left join BD_LTV bdl on bdl.CustomerID = upper(trim(c.CustomerID))
         where coalesce(email, '') <> ''
         and (c.IsAffiliate is null or c.IsAffiliate = 0)
         and OpenedBy = 'Internet'
@@ -77,8 +91,8 @@ SELECT
     , coalesce(string_agg(ba.[BA CustomerID], ', '), '') as [BA CustomerIDs]
     , coalesce(string_agg(ba.[BA AffiliateID], ', '), '') as [BA AffiliateIDs]
     , coalesce(string_agg(ba.[BA AgentID], ', '), '') as [BA AgentIDs]
-    , [BD RecentTransactions]
-    , sum(ba.[BA RecentTransactions]) as [BA RecentTransactions]
+    , coalesce(bd.[BD LTV], 0) as [BD LTV]
+    , coalesce(sum(ba.[BA LTV]), 0) as [BA LTV]
     , bd.[BD Last Session Activity]
     , max(ba.[BA Last Session Activity]) as [BA Last Session Activity]
     , bd.[BD Last Deposit Date]
@@ -103,10 +117,9 @@ SELECT
         , bd.[BD Current Balance]
         , bd.[BD CID]
         , bd.[BD InetTarget]
-        , bd.[BD RecentTransactions]
+        , bd.[BD LTV]
         , bd.[BD Registration Date]
         , bd.[BD Active]
-        , [BD RecentTransactions]
         , bd.[BD Last Session Activity]
         , case when bad.[BA CustomerID] is not null then 'Ivan Clash' else '' end
 order by bd.[BD EMail]
