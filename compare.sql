@@ -35,7 +35,6 @@ with
             , CurrentBalance/100.0 as [BA Current Balance]
             , cast(SessionLastActivity as date) as [BA Last Session Activity]
             , cid as [BA CID]            
-            , InetTarget as [BA InetTarget]
             , coalesce(bl.[BA LTV], 0) as [BA LTV]
             , case when c.AgentType in ('M', 'A') then AffiliateID else null end as [BA AffiliateID]
             , AgentID as [BA AgentID]
@@ -75,14 +74,13 @@ with
             , CurrentBalance/100.0 as [BD Current Balance]
             , cast(bl.SessionLastActivity as date) as [BD Last Session Activity]
             , cid as [BD CID]
-            , InetTarget as [BD InetTarget]
             , coalesce(bdl.[BD LTV], 0) as [BD LTV]
-        from BettorsDenDev..tbCustomer c
+        from BettorsDenDev..vw_tbCustomer c
         left join BD_LastDeposit bd on bd.CustomerID = trim(c.CustomerID)
         left join BD_LastLogin bl on bl.CustomerID = trim(c.CustomerID)
         left join BD_LTV bdl on bdl.CustomerID = upper(trim(c.CustomerID))
         where coalesce(email, '') <> ''
-        and (c.IsAffiliate is null or c.IsAffiliate = 0)
+        and isnull(c.IsAffiliate, 0) = 0
         and OpenedBy = 'Internet'
     )
 SELECT
@@ -104,8 +102,6 @@ SELECT
     , [BD Active]
     , coalesce(string_agg(ba.[BA Active], ', '), '') as [BA Active]
     , bd.[BD CID]
-    , bd.[BD InetTarget]
-    , coalesce(string_agg(ba.[BA InetTarget], ', '), '') as [BA InetTarget]
     , case when bad.[BA CustomerID] is not null then 'Ivan Clash' else '' end as [Customer ID In Both]
     from bd 
     left join ba on ba.[BA EMail] = bd.[BD EMail]
@@ -116,7 +112,6 @@ SELECT
         , bd.[BD Last Deposit Date]
         , bd.[BD Current Balance]
         , bd.[BD CID]
-        , bd.[BD InetTarget]
         , bd.[BD LTV]
         , bd.[BD Registration Date]
         , bd.[BD Active]
