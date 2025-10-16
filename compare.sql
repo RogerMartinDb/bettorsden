@@ -34,6 +34,7 @@ with
             , cast(LastDepositDateTime as date) as [BA Last Deposit Date]
             , CurrentBalance/100.0 as [BA Current Balance]
             , cast(SessionLastActivity as date) as [BA Last Session Activity]
+            , cast(LastWagerDateTime as date) as [BA Last Wager Date]
             , cid as [BA CID]            
             , coalesce(bl.[BA LTV], 0) as [BA LTV]
             , case when c.AgentType in ('M', 'A') then AffiliateID else null end as [BA AffiliateID]
@@ -66,22 +67,24 @@ with
     ),
     BD as (
         select
-            EMail as [BD EMail]
+            c.EMail as [BD EMail]
             , trim(c.CustomerID) as [BD CustomerID]
-            , Active as [BD Active]
-            , cast(OpenDateTime as date) as [BD Registration Date]
+            , c.Active as [BD Active]
+            , cast(c.OpenDateTime as date) as [BD Registration Date]
             , LastDepositDate as [BD Last Deposit Date]
-            , CurrentBalance/100.0 as [BD Current Balance]
+            , c.CurrentBalance/100.0 as [BD Current Balance]
             , cast(bl.SessionLastActivity as date) as [BD Last Session Activity]
-            , cid as [BD CID]
+            , cast(LastWagerDateTime as date) as [BD Last Wager Date]
+            , c.cid as [BD CID]
             , coalesce(bdl.[BD LTV], 0) as [BD LTV]
         from BettorsDenDev..vw_tbCustomer c
+        join BettorsDenDev..tbCustomer rc on rc.CustomerID = c.CustomerID
         left join BD_LastDeposit bd on bd.CustomerID = trim(c.CustomerID)
         left join BD_LastLogin bl on bl.CustomerID = trim(c.CustomerID)
         left join BD_LTV bdl on bdl.CustomerID = upper(trim(c.CustomerID))
-        where coalesce(email, '') <> ''
-        and isnull(c.IsAffiliate, 0) = 0
-        and OpenedBy = 'Internet'
+        where coalesce(c.email, '') <> ''
+        and isnull(rc.IsAffiliate, 0) = 0
+        and c.OpenedBy = 'Internet'
     )
 SELECT
     bd.[BD EMail]
@@ -96,6 +99,8 @@ SELECT
     , bd.[BD Last Deposit Date]
     , max(ba.[BA Last Deposit Date]) as [BA Last Deposit Date]
     , bd.[BD Current Balance]
+    , bd.[BD Last Wager Date]
+    , max(ba.[BA Last Wager Date]) as [BA Last Wager Date]
     , sum(ba.[BA Current Balance]) as[BA Current Balance]
     , bd.[BD Registration Date]
     , min(ba.[BA Registration Date]) as [BA Registration Date]
